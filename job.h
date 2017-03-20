@@ -45,6 +45,7 @@ class JobId {
 class Job : public JobId {
     private:
         uint64_t jobid;
+        int64_t overruns = 0;
         std::string command;
         duration<int, std::milli> interval;
 
@@ -60,6 +61,8 @@ class Job : public JobId {
         std::string& getCommand();
 
         void setScheduled();
+        void resetOverruns();
+        int64_t getOverruns();
 
         bool operator<(const class Job& jright);
         bool spawnProcess() const;

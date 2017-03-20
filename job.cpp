@@ -1,6 +1,8 @@
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
+
+#include <sys/wait.h>
 #include "job.h"
 
 using namespace std;
@@ -54,6 +56,14 @@ void Job::setScheduled() {
     this->scheduled = true;
 }
 
+void Job::resetOverruns() {
+    this->overruns = 0;
+}
+
+int64_t Job::getOverruns() {
+    return this->overruns;
+}
+
 /* This will be used to see which job should be run first */
 bool Job::operator<(const class Job& jright)
 {
@@ -67,14 +77,14 @@ bool Job::operator<(const class Job& jright)
 
 bool Job::nextRun() {
 
-    /* don't schedule new one till last job is finished */
-//    if(this->scheduled == true) {
-//        return -1;
-//    }
     duration<int, std::milli> dl = duration_cast<std::chrono::milliseconds>(steady_clock::now() - this->lastrun);
 
-    if((dl.count() - this->interval.count()) < 0) {
+    if(dl.count() < this->interval.count()) {
         return false;
+    }
+
+    if(dl.count() > this->interval.count()) {
+        this->overruns++;
     }
 
     LOG<<"Scheduling a process: "<<this->command<<"' with "<<dl.count()<<"ms duration elapsed"<<endl;
@@ -90,6 +100,9 @@ bool Job::spawnProcess() const {
     switch(child_pid) {
         case 0:
             /* child process; Only call async signal safe commands after this! */
+            close(0);
+            close(1);
+            close(2);
             if(execlp("/bin/sh","sh","-c", this->command.c_str(), NULL) == -1) {
                 LOG<<"Child failed to exec"<<endl;
                 exit(0);
@@ -102,8 +115,9 @@ bool Job::spawnProcess() const {
             break;
         default:
             /* parent process (thread here)*/
+//            int status;
+//            wait(&status);
             break;
     }
-//    this->scheduled = false;
 }
 

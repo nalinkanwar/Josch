@@ -4,10 +4,11 @@
 #include <chrono>
 #include "josch.h"
 
-#define NUMTHREADS 4
+#define MINTHREADS 4
+#define MAXTHREADS 100
 
 //template <typename clock>
-Josch::Josch(): tpvec(NUMTHREADS)
+Josch::Josch(): tpvec(MINTHREADS)
 {
 
 }
@@ -22,6 +23,19 @@ bool Josch::init() {
     }
 
     LOG<<"Josch inited"<<std::endl;
+}
+
+bool Josch::spawnExtraThreads(int n) {
+
+    if(this->tpvec.size() > MAXTHREADS) {
+        return false;
+    }
+    for(int ctr = 0; ctr < n; ctr++) {
+        this->tpvec.push_back(std::thread(&Josch::thread_loop, this));
+    }
+
+    return true;
+
 }
 
 void Josch::thread_loop() {
@@ -76,8 +90,12 @@ void Josch::handle_jobs() {
 
         for(auto &next_task: this->jlist) {
 
-            /* if we don't have enough scheduled jobs, schedule them */
-            if((this->workqueue.size() < NUMTHREADS) && (next_task.nextRun() == true)) {
+//            if(next_task.getOverruns() > 100) {
+//                next_task.resetOverruns();
+//                this->spawnExtraThreads(MINTHREADS);
+//            }
+
+            if(/*(this->workqueue.size() < NUMTHREADS) &&*/ (next_task.nextRun() == true)) {
                 this->workqueue.push(next_task);
             }
         }

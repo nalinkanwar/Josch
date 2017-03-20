@@ -38,6 +38,8 @@ class Josch {
 
         void list_jobs();
         void handle_jobs();
+
+        bool spawnExtraThreads(int n);
 };
 
 
