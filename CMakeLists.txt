@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 2.8)
+
+project(josch)
+
+set (SOURCES "main.cpp"
+    "job.cpp" "job.h"
+    "josch.cpp" "josch.h")
+
+add_executable(${PROJECT_NAME} ${SOURCES})
+
+target_link_libraries(${PROJECT_NAME} pthread)
