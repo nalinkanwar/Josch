@@ -8,21 +8,21 @@
 
 #define LOG std::cout<<"["<<std::this_thread::get_id()<<"] "
 
-//void* spawnJob(std::string command, int interval);
-
-using namespace std::chrono;
-
 /* This class is used to give unique id to new Jobs;
  * We just use a constantly increasing static unsigned integer
  * which will roll over on overflow */
-
 class JobId {
     private:
         static uint64_t jobid_counter;
     protected:
         JobId() {
-            jobid_counter++;
+
         }
+
+        int64_t nextJobId() {
+            return jobid_counter++;
+        }
+
     public:
         uint64_t static getCurrJobId() {
             return jobid_counter;
@@ -45,11 +45,11 @@ class JobId {
 class Job : public JobId {
     private:
         uint64_t jobid;
-        int64_t overruns = 0;
-        std::string command;
-        duration<int, std::milli> interval;
+        int64_t overruns = 0;        
+        std::chrono::duration<int, std::milli> interval;
 
-        mutable time_point<steady_clock> lastrun;
+        mutable std::string command;
+        mutable std::chrono::time_point<std::chrono::steady_clock> lastrun;
         mutable bool scheduled = false;
     public:
         Job();
@@ -58,11 +58,12 @@ class Job : public JobId {
         Job(const class Job& j);
 
         uint64_t getJobId() const;
-        std::string& getCommand();
+        std::string& getCommand() const;
+        int64_t getInterval() const;
+        int64_t getOverruns();
 
         void setScheduled();
         void resetOverruns();
-        int64_t getOverruns();
 
         bool operator<(const class Job& jright);
         bool spawnProcess() const;

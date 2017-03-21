@@ -1,33 +1,23 @@
 #include <iostream>
+#include <algorithm>
 #include <mutex>
 #include <thread>
 #include <chrono>
 #include "josch.h"
 
-#define MINTHREADS 4
-#define MAXTHREADS 100
-
 //template <typename clock>
-Josch::Josch(): tpvec(MINTHREADS)
-{
+Josch::Josch(): tpvec(MINTHREADS) { }
+Josch::Josch(unsigned numthreads): tpvec(numthreads) { }
 
-}
+bool Josch::spawnExtraThreads(unsigned n) {
 
-bool Josch::init() {
+    unsigned maxthreads = std::thread::hardware_concurrency();
 
-    /* @FIXME if alraedy inited, don't do it again! */
-    /* initialize our thread pool first */
-    LOG<<"Josch init start"<<std::endl;
-    for(auto& t: this->tpvec) {
-        t = std::thread(&Josch::thread_loop, this);
+    if(maxthreads == 0) {
+        maxthreads = MINTHREADS;
     }
 
-    LOG<<"Josch inited"<<std::endl;
-}
-
-bool Josch::spawnExtraThreads(int n) {
-
-    if(this->tpvec.size() > MAXTHREADS) {
+    if(this->tpvec.size() > maxthreads) {
         return false;
     }
     for(int ctr = 0; ctr < n; ctr++) {
@@ -41,16 +31,16 @@ bool Josch::spawnExtraThreads(int n) {
 void Josch::thread_loop() {
     /* start picking up from workqueue in threads */
 
-    LOG<<"Thread loop started"<<std::endl;
+    //LOG<<"Thread loop started"<<std::endl;
 
     while(true) {
 
         std::unique_lock<std::mutex> lock(this->mut_wq);
         while(this->workqueue.empty()) {
-            //std::cout<<"Going to wait for workqueue to get full"<<std::endl;
+            //LOG<<"Going to wait for workqueue to get filled"<<std::endl;
             this->cv_wq.wait(lock);
         }
-        //std::cout<<"["<< std::this_thread::get_id() << "] Woke up!"<<std::endl;
+        //LOG<<"Woke up!"<<std::endl;
         const class Job& job = this->workqueue.top();
         this->workqueue.pop();
         job.spawnProcess();
@@ -71,17 +61,45 @@ bool Josch::unregister_job(uint64_t tmpjobid) {
 
     std::lock_guard<std::mutex> lock(this->mut_jl);
 
-    //@FIXME
-    //std::find()
+    std::remove_if(this->jlist.begin(), this->jlist.end(), [&tmpjobid](const class Job& j) {
+        if(j.getJobId() == tmpjobid) {
+            return true;
+        }
+    });
+}
 
+bool Josch::unregister_job(Job& oldj) {
+    std::lock_guard<std::mutex> lock(this->mut_jl);
+
+    this->jlist.erase(std::remove_if(this->jlist.begin(), this->jlist.end(), [&oldj] (const class Job& j) {
+        if(oldj.getCommand() != j.getCommand()) {
+            return false;
+        }
+        if(oldj.getInterval() != j.getInterval()) {
+            return false;
+        }
+        LOG<<"Removing "<<j.getCommand()<<" with interval "<<j.getInterval()<<std::endl;
+        return true;
+    }), this->jlist.end());
 }
 
 ///template <typename clock>
 void Josch::list_jobs() {
 
+    LOG<<std::string(80, '=')<<std::endl;
+
+    for(auto& job: this->jlist) {
+        LOG<<" Job["<<job.getJobId()<<"]: '"<<job.getCommand()<<"' ival: "<<job.getInterval()<<std::endl;
+    }
+
+    LOG<<std::string(80, '=')<<std::endl;
 }
 
 void Josch::handle_jobs() {
+
+    for(auto& t: this->tpvec) {
+        t = std::thread(&Josch::thread_loop, this);
+    }
 
     /* main JobScheduler loop */
     while (true) {

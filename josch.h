@@ -11,6 +11,8 @@
 
 #include "job.h"
 
+#define MINTHREADS 4
+
 //template <typename clock>
 class Josch {
     private:
@@ -29,17 +31,18 @@ class Josch {
         std::vector<std::thread> tpvec; /* Consumers threads - Job Runners */
     public:
         Josch();
+        Josch(unsigned numthreads);
 
-        bool init();
         void thread_loop();
 
-        bool register_job(class Job& newj);
+        bool register_job(Job& newj);
         bool unregister_job(uint64_t tmpjobid);
+        bool unregister_job(Job& oldj);
 
         void list_jobs();
         void handle_jobs();
 
-        bool spawnExtraThreads(int n);
+        bool spawnExtraThreads(unsigned n);
 };
 
 
