@@ -2,9 +2,11 @@ cmake_minimum_required(VERSION 2.8)
 
 project(josch)
 
-set (SOURCES "main.cpp"
+set (SOURCES "main.cpp" "tlv.h"
     "job.cpp" "job.h"
-    "josch.cpp" "josch.h")
+    "josch.cpp" "josch.h"
+    "client_handler.cpp" "client_handler.h"
+    "tlv_client.cpp" "tlv_client.h")
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 

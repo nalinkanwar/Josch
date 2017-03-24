@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <queue>
+#include <atomic>
 #include <condition_variable>
 
 #include "job.h"
@@ -29,20 +30,26 @@ class Josch {
         std::condition_variable cv_wq;
 
         std::vector<std::thread> tpvec; /* Consumers threads - Job Runners */
+
+        std::atomic<bool> quit;
     public:
         Josch();
         Josch(unsigned numthreads);
 
-        void thread_loop();
+        void thread_loop(std::atomic<bool> &quit_flag);
 
-        bool register_job(Job& newj);
+//        void thread_loop();
+
+        bool register_job(std::string &cmd, int ival);
         bool unregister_job(uint64_t tmpjobid);
-        bool unregister_job(Job& oldj);
+        bool unregister_job(std::string &cmd, int ival);
 
         void list_jobs();
         void handle_jobs();
 
         bool spawnExtraThreads(unsigned n);
+
+        void die();
 };
 
 

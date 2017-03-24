@@ -3,11 +3,14 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
+
 #include "josch.h"
 
+extern int main_quit;
+
 //template <typename clock>
-Josch::Josch(): tpvec(MINTHREADS) { }
-Josch::Josch(unsigned numthreads): tpvec(numthreads) { }
+Josch::Josch(): tpvec(MINTHREADS) {  this->quit = false; }
+Josch::Josch(unsigned numthreads): tpvec(numthreads) { this->quit = false; }
 
 bool Josch::spawnExtraThreads(unsigned n) {
 
@@ -21,39 +24,56 @@ bool Josch::spawnExtraThreads(unsigned n) {
         return false;
     }
     for(int ctr = 0; ctr < n; ctr++) {
-        this->tpvec.push_back(std::thread(&Josch::thread_loop, this));
+        this->tpvec.push_back(std::thread(&Josch::thread_loop, this, std::ref(this->quit)));
     }
 
     return true;
-
 }
 
-void Josch::thread_loop() {
+void Josch::die() {
+    this->quit = true;
+}
+
+void Josch::thread_loop(std::atomic<bool> &quit_flag) {
     /* start picking up from workqueue in threads */
 
-    //LOG<<"Thread loop started"<<std::endl;
+    LOG<<"Thread started"<<std::endl;
 
-    while(true) {
+    while(this->quit == false) {
 
         std::unique_lock<std::mutex> lock(this->mut_wq);
         while(this->workqueue.empty()) {
             //LOG<<"Going to wait for workqueue to get filled"<<std::endl;
+            if(this->quit == true) {
+                break;
+            }
             this->cv_wq.wait(lock);
+        }
+
+        if(this->quit == true) {
+            break;
         }
         //LOG<<"Woke up!"<<std::endl;
         const class Job& job = this->workqueue.top();
         this->workqueue.pop();
         job.spawnProcess();
     }
+    LOG<<"Thread finished"<<std::endl;
 }
 
 //template <typename clock>
-bool Josch::register_job(Job &newj) {
+bool Josch::register_job(std::string &cmd, int ival) {
 
     std::lock_guard<std::mutex> lock(this->mut_jl);
+    try {
 
-    LOG<<"Registering Job : "<<newj.getJobId()<<std::endl;
-    this->jlist.push_back(newj);
+        LOG<<"Registering Job : "<<cmd<<" with interval "<<ival<<std::endl;
+        this->jlist.push_back(Job(cmd, ival));
+    } catch (std::exception &e) {
+        LOG<<"Couldn't register job "<<e.what()<<std::endl;
+        return false;
+    }
+
 }
 
 //template <typename clock>
@@ -68,14 +88,14 @@ bool Josch::unregister_job(uint64_t tmpjobid) {
     });
 }
 
-bool Josch::unregister_job(Job& oldj) {
+bool Josch::unregister_job(std::string &cmd, int ival) {
     std::lock_guard<std::mutex> lock(this->mut_jl);
 
-    this->jlist.erase(std::remove_if(this->jlist.begin(), this->jlist.end(), [&oldj] (const class Job& j) {
-        if(oldj.getCommand() != j.getCommand()) {
+    this->jlist.erase(std::remove_if(this->jlist.begin(), this->jlist.end(), [&cmd, &ival] (const class Job& j) {
+        if(cmd != j.getCommand()) {
             return false;
         }
-        if(oldj.getInterval() != j.getInterval()) {
+        if(ival != j.getInterval()) {
             return false;
         }
         LOG<<"Removing "<<j.getCommand()<<" with interval "<<j.getInterval()<<std::endl;
@@ -98,28 +118,39 @@ void Josch::list_jobs() {
 void Josch::handle_jobs() {
 
     for(auto& t: this->tpvec) {
-        t = std::thread(&Josch::thread_loop, this);
+        t = std::thread(&Josch::thread_loop, this, std::ref(this->quit));
     }
 
     /* main JobScheduler loop */
-    while (true) {
+    while (this->quit == false) {
 
         std::unique_lock<std::mutex> lock(this->mut_wq);
+        std::unique_lock<std::mutex> lock2(this->mut_jl);
 
         for(auto &next_task: this->jlist) {
 
 //            if(next_task.getOverruns() > 100) {
 //                next_task.resetOverruns();
 //                this->spawnExtraThreads(MINTHREADS);
-//            }
-
+//            }            
             if(/*(this->workqueue.size() < NUMTHREADS) &&*/ (next_task.nextRun() == true)) {
                 this->workqueue.push(next_task);
             }
         }
+        lock2.unlock();
 
         this->cv_wq.notify_all();
+        lock.unlock();
+        /* this happens in main thread; so we are only accessing
+         * this variable in one thread and doesn't need mutex */
+        if(main_quit == true) {
+            this->quit = true;
+        }
     }
+
+    /* wake up all threads before exiting */
+    this->cv_wq.notify_all();
+    LOG<<"Main thread done : "<<this->quit<<std::endl;
 
     /* make sure all threads exit before killing the main thread */
     for(auto& t: this->tpvec) {

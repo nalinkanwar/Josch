@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include <sys/wait.h>
+
 #include "job.h"
 
 Job::Job()
