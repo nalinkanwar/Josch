@@ -1,6 +1,8 @@
 #ifndef TLV_H
 #define TLV_H
 
+#include <stdint.h>
+
 enum tlv_types {
     TLV_NONE = 0,
     TLV_REGISTER_JOB,

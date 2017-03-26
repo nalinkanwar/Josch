@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
                         LOG<<"Invalid interval "<<interval<<std::endl;
                     }
 
-                    LOG<<"Registering "<<jobcmd<<" with interval "<<interval<<std::endl;
+                    LOG<<"Registering "<<jobcmd<<" with interval "<<std::endl;
 
                     class tlv_client t;
                     if(t.init(std::string(DEFAULT_FPATH)) == false) {
@@ -94,6 +94,8 @@ int main(int argc, char *argv[])
                     if(t.sendcmd(TLV_REGISTER_JOB, jobcmd, interval) == false) {
                         LOG<<"Failed to send command to josch"<<std::endl;
                     }
+                    LOG<<"Registered '"<<jobcmd<<"' successfully"<<std::endl;
+
                     exit(0);
                 } else {
                     //@FIXME invalid argument?
@@ -114,7 +116,7 @@ int main(int argc, char *argv[])
                         LOG<<"Invalid interval "<<interval<<std::endl;
                     }
 
-                    LOG<<"Unregistering "<<jobcmd<<" with interval "<<interval<<std::endl;
+                    LOG<<"Unregistering "<<jobcmd<<" with interval "<<std::endl;
 
                     class tlv_client t;
                     if(t.init(std::string(DEFAULT_FPATH)) == false) {
@@ -124,6 +126,7 @@ int main(int argc, char *argv[])
                     if(t.sendcmd(TLV_UNREGISTER_JOB, jobcmd, interval) == false) {
                         LOG<<"Failed to send command to josch"<<std::endl;
                     }
+                    LOG<<"Unregistered '"<<jobcmd<<"' successfully"<<std::endl;
                     exit(0);
                 } else {
                     //@FIXME invalid argument?
@@ -151,6 +154,7 @@ int main(int argc, char *argv[])
     /* set child handler to reap zombie childs */
     signal(SIGCHLD, proc_exit);
     signal(SIGINT, handle_quit);
+    signal(SIGPIPE, SIG_IGN);
 
     unsigned nHWthreads = std::thread::hardware_concurrency();
     //LOG<<"HWTheads: "<<nHWthreads<<std::endl;
@@ -158,7 +162,7 @@ int main(int argc, char *argv[])
 
         class Josch js(nHWthreads ? nHWthreads: MINTHREADS);
         class client_handler ch(&js);
-        ch.init(DEFAULT_FPATH);
+        ch.init(std::string(DEFAULT_FPATH));
 
         js.handle_jobs();
         LOG<<"Finished handling jobs"<<endl;

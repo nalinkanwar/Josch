@@ -9,54 +9,27 @@
 
 #include "tlv.h"
 #include "josch.h"
-
-#define LOG std::cout<<"["<<std::this_thread::get_id()<<"] "
-#define BUFFSIZE 8196
-
-enum client_states {
-    STATE_RECVING,
-    STATE_SEND_RESP,
-    STATE_SEND_LIST
-};
-
-struct client {
-    int fd;
-    int state;
-    uint32_t size;
-    uint32_t filled;
-    uint32_t processed;
-
-    int interval;
-    std::string cmd;
-    bool write_ready;
-
-    char iobuf[BUFFSIZE];
-};
+#include "conn_handler.h"
 
 class client_handler
 {
-    private:
+    protected:
         std::thread th;
-        int lfd;
-        int epfd;
-        std::list<struct client> clist;
-        std::string fpath;
-        std::atomic<bool> quit;
+        std::atomic<bool> quit;        
         Josch *j;
 
-        void close_client(int fd);
-        bool process_data(struct tlv *tptr, client &cl);
-        bool write_handler(struct client &cl);
-        bool read_handler(struct client &cl);
-        void set_state_sending(struct tlv *tptr, struct client &cl, int type);
-        bool send_list_handler(struct client &cl);
+        std::string fpath;
+        int lfd, epfd;
+        std::list<class conn_handler<class client_handler>> cl_list;
     public:
         client_handler(Josch *tmpj);
         ~client_handler();
-        bool init(const std::string &fpath);
-        bool handle_conns();
-        bool handle_listener(epoll_event &ev);
-        bool handle_client(epoll_event &ev);
+        bool init(const std::string &fp);
+
+        void handle_conns();
+        void handle_listener();
+
+        friend tlv_types command_handler(client_handler& ch, char* ptr, int length);
 
         void join();
         void die();
