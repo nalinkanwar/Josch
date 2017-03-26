@@ -95,10 +95,17 @@ int main(int argc, char *argv[])
 
                 if(pos != std::string::npos) {
                     std::string jobcmd = arg.substr(0, pos);
-                    int interval = std::stol(arg.substr(pos+1));
+                    int interval;
+                    try {
+                        interval = std::stol(arg.substr(pos+1));
+                    } catch (std::exception & e){
+                        interval = 0;
+                    }
 
-                    if(interval == 0) {
+                    if(interval <= 0) {
                         LOG<<"Invalid interval "<<interval<<std::endl;
+                        print_usage(argv[0]);
+                        exit(0);
                     }
 
                     LOG<<"Registering "<<jobcmd<<" with interval "<<std::endl;
@@ -134,10 +141,17 @@ int main(int argc, char *argv[])
 
                 if(pos != std::string::npos) {
                     std::string jobcmd = arg.substr(0, pos);
-                    int interval = std::stol(arg.substr(pos+1));
+                    int interval;
+                    try {
+                        interval = std::stol(arg.substr(pos+1));
+                    } catch (std::exception & e){
+                        interval = 0;
+                    }
 
-                    if(interval == 0) {
+                    if(interval <= 0) {
                         LOG<<"Invalid interval "<<interval<<std::endl;
+                        print_usage(argv[0]);
+                        exit(0);
                     }
 
                     LOG<<"Unregistering "<<jobcmd<<" with interval "<<std::endl;
