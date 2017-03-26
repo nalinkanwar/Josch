@@ -6,12 +6,13 @@
 
 #include "job.h"
 
-Job::Job()
-{
+Job::Job() { }
 
+Job::~Job() {
+    //LOG<<"Destructing job with jobid '"<<this->jobid<<"' and command "<<this->command<<std::endl;
 }
 
-Job::Job(std::string cmd, int ival)
+Job::Job(const std::string cmd, int ival)
 {
     this->command = cmd;
     this->jobid = JobId::nextJobId();
@@ -21,49 +22,41 @@ Job::Job(std::string cmd, int ival)
     LOG<<"Created new job with jobid: '"<<this->jobid<<"' with "<<this->interval.count()<<" ms duration"<<std::endl;
 }
 
-
-Job::Job(class Job& j)
-{
-    //LOG<<"Copying job with jobid '"<<j.jobid<<"'"<<endl;
-
-    this->command = j.command;
-    this->jobid = j.jobid;
-    this->interval = j.interval;
-    this->lastrun = j.lastrun;
-}
-
 Job::Job(const class Job& j)
 {
-    //LOG<<"Copying const job with jobid '"<<j.jobid<<"'"<<endl;
+    //LOG<<"Copying const job with jobid '"<<j.jobid<<"' and command "<<j.command<<std::endl;
 
-    this->command = j.command;
+    //this->command = j.command;
+    this->command.clear();
+    this->command.append(j.command);
+
     this->jobid = j.jobid;
     this->interval = j.interval;
     this->lastrun = j.lastrun;
 }
 
-uint64_t Job::getJobId() const {
+uint64_t Job::get_job_id() const {
     return this->jobid;
 }
 
-std::string& Job::getCommand() const {
-    return this->command;
+const char* Job::get_command() const {
+    return (this->command.c_str());
 }
 
-int64_t Job::getInterval() const {
+int64_t Job::get_interval() const {
     return this->interval.count();
 }
 
-void Job::setScheduled() {
+void Job::set_scheduled() {
     LOG<<"Scheduling job..."<<std::endl;
     this->scheduled = true;
 }
 
-void Job::resetOverruns() {
+void Job::reset_overruns() {
     this->overruns = 0;
 }
 
-int64_t Job::getOverruns() {
+int64_t Job::get_overruns() {
     return this->overruns;
 }
 
@@ -80,7 +73,8 @@ bool Job::operator<(const class Job& jright)
    return (this->interval.count() - dl.count()) < (this->interval.count() - dr.count());
 }
 
-bool Job::nextRun() {
+/* schedule the next time to run for the Job */
+bool Job::next_run() {
 
     using namespace std::chrono;
 
@@ -99,9 +93,9 @@ bool Job::nextRun() {
     return true;
 }
 
-bool Job::spawnProcess() const {
+bool Job::spawn_process() const {
 
-    LOG<<"Spawning a process: "<<this->command<<"'"<<std::endl;
+    LOG<<"Spawning a process: '"<<this->command<<"'"<<std::endl;
     pid_t child_pid = fork();
 
     switch(child_pid) {

@@ -13,7 +13,7 @@ enum tlv_types {
 struct tlv {
     int32_t type;
     int32_t length;
-    int32_t last:1;
+    int32_t last;
     char value[0];
 };
 

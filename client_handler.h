@@ -5,6 +5,7 @@
 #include <string>
 #include <thread>
 #include <list>
+#include <chrono>
 
 #include "tlv.h"
 #include "josch.h"
@@ -14,7 +15,8 @@
 
 enum client_states {
     STATE_RECVING,
-    STATE_SENDING
+    STATE_SEND_RESP,
+    STATE_SEND_LIST
 };
 
 struct client {
@@ -23,7 +25,11 @@ struct client {
     uint32_t size;
     uint32_t filled;
     uint32_t processed;
-    bool write_pending;
+
+    int interval;
+    std::string cmd;
+    bool write_ready;
+
     char iobuf[BUFFSIZE];
 };
 
@@ -37,7 +43,13 @@ class client_handler
         std::string fpath;
         std::atomic<bool> quit;
         Josch *j;
+
         void close_client(int fd);
+        bool process_data(struct tlv *tptr, client &cl);
+        bool write_handler(struct client &cl);
+        bool read_handler(struct client &cl);
+        void set_state_sending(struct tlv *tptr, struct client &cl, int type);
+        bool send_list_handler(struct client &cl);
     public:
         client_handler(Josch *tmpj);
         ~client_handler();

@@ -7,6 +7,8 @@
 #include <sys/un.h>
 #include "tlv_client.h"
 
+#define TLV_MAX_LEN 8096
+
 tlv_client::tlv_client() {
 
 }
@@ -20,6 +22,7 @@ bool tlv_client::init(const std::string& f) {
 
     this->fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if(this->fd == -1) {
+        LOG<<"Failed to create socket due to "<<std::strerror(errno)<<std::endl;
         return false;
     }
 
@@ -30,6 +33,7 @@ bool tlv_client::init(const std::string& f) {
 
     if(connect(this->fd, (struct sockaddr *)&sun, sizeof(struct sockaddr_un)) == -1) {
         //@FIXME error
+        LOG<<"Failed to connect due to "<<std::strerror(errno)<<std::endl;
         close(this->fd);
         this->fd = -1;
         return false;
@@ -45,8 +49,7 @@ int generic_writer(int fd, char *buff, int len) {
     ret = write(fd, buff, len);
     switch(ret) {
         case -1:
-            //@FIXME handlerror
-            LOG<<"write failed due to"<<std::strerror(errno)<<std::endl;
+            LOG<<"write failed due to "<<std::strerror(errno)<<std::endl;
             return -1;
             break;
         case 0:
@@ -54,7 +57,7 @@ int generic_writer(int fd, char *buff, int len) {
             return -1;
             break;
         default:
-            LOG<<"Wrote "<<ret<<" bytes"<<std::endl;
+            //LOG<<"Wrote "<<ret<<" bytes"<<std::endl;
             break;
     }
     return ret;
@@ -66,8 +69,7 @@ int generic_reader(int fd, char *buff, int len) {
     ret = read(fd, buff, len);
     switch(ret) {
         case -1:
-            //@FIXME handlerror
-            LOG<<"write failed due to"<<std::strerror(errno)<<std::endl;
+            LOG<<"write failed due to "<<std::strerror(errno)<<std::endl;
             return -1;
             break;
         case 0:
@@ -75,19 +77,46 @@ int generic_reader(int fd, char *buff, int len) {
             return -1;
             break;
         default:
-            LOG<<"Wrote "<<ret<<" bytes"<<std::endl;
+            //LOG<<"Wrote "<<ret<<" bytes"<<std::endl;
             break;
     }
     return ret;
 }
 
-bool tlv_client::sendcmd(int type, std::string& cmd, int interval) {
+bool tlv_client::handle_tlv_list_jobs(int length) {
+    //@FIXME
+
+    int nread = 0, ret;
+    char buff[4096];
+
+    while(nread != length) {
+        ret = read(this->fd, buff, 4096);
+        switch(ret) {
+            case -1:
+                LOG<<std::endl<<"Read failed due to "<<std::strerror(errno)<<std::endl;
+                break;
+            case 0:
+                LOG<<std::endl<<"Server abruptly closed connection"<<std::endl;
+                break;
+            default:
+                LOG<<"Got "<<ret<<" bytes"<<std::endl;
+                nread += ret;
+                std::cout.write(buff, ret);
+                std::cout<<std::endl;
+                break;
+        }
+    }
+
+    return true;
+}
+
+bool tlv_client::sendcmd(tlv_types type, std::string& cmd, int interval) {
 
     enum {
         SENDING_NONE = 0,
         SENDING_TLV,
         SENDING_CMD,
-        RECVING_RESP
+        RECVING_RESP,
     };
 
     std::string s;
@@ -98,24 +127,35 @@ bool tlv_client::sendcmd(int type, std::string& cmd, int interval) {
     int bytes = 0, tosend = 0, ret;
     int state = SENDING_TLV;
 
-    s.append(cmd);
-    s.append(",");
-    s.append(std::to_string(interval));
-    LOG<<"COMMAND: "<<s<<std::endl;
+    /* prep the cmd to be sent */
+    if(interval > 0) {
+        s.append(cmd);
+        s.append(",");
+        s.append(std::to_string(interval));
+    }
 
-    tosend = (sizeof (struct tlv)) + s.size();
+    //LOG<<"COMMAND: '"<<s<<"'"<<std::endl;
 
     t.type = type;
-    t.length = s.size();
+    if(s.length() > TLV_MAX_LEN) {
+        t.length = TLV_MAX_LEN;
+        t.last = 0;
 
-    tosend = sizeof(struct tlv);
-    while(finished == false) {
-        LOG<<" bytes "<<bytes<<" tosend "<<tosend<<std::endl;
+        tosend = s.length() + (sizeof(struct tlv) * (s.length()/TLV_MAX_LEN));
+    } else {
+        t.length = s.length();
+        t.last = 1;
+
+        tosend = s.length() + sizeof(struct tlv);
+    }
+
+    while(tosend != 0) {
+        //LOG<<" bytes "<<bytes<<" tosend "<<tosend<<std::endl;
         switch(state) {
             case SENDING_TLV:                
                 sptr = ((char *)&t + bytes);
 
-                ret = generic_writer(this->fd, sptr, tosend - bytes);
+                ret = generic_writer(this->fd, sptr, sizeof(struct tlv) - bytes);
                 switch(ret) {
                     case -1:
                         close(this->fd);
@@ -123,104 +163,112 @@ bool tlv_client::sendcmd(int type, std::string& cmd, int interval) {
                         return false;
                         break;
                     default:
-                        bytes += ret;
+                        bytes += ret;                        
                         if(bytes == sizeof(struct tlv)) {
-                            state = SENDING_CMD;
-                            sptr = (char *)(s.c_str());
-                            bytes = 0;
-                            tosend = s.length() + 1;
-                            LOG<<" sending cmd "<<sptr<<std::endl;
-                        }
-                        break;
-                }
-
-                break;
-            case SENDING_CMD:
-                sptr = ((char *)s.c_str() + bytes);
-
-                ret = generic_writer(this->fd, sptr, tosend - bytes);
-                switch(ret) {
-                    case -1:
-                        close(this->fd);
-                        this->fd = -1;
-                        return false;
-                        break;
-                    default:
-                        bytes += ret;
-                        if(bytes == s.length() + 1) {
-                            state = RECVING_RESP;
-                            bytes = 0;
-                            LOG<<" awaiting response from server "<<std::endl;
-                        }
-                        break;
-                }
-                break;
-            case RECVING_RESP:
-                sptr = ((char*)&t + bytes);
-
-                ret = generic_reader(this->fd, sptr, sizeof(struct tlv) - bytes);
-                switch(ret) {
-                    case -1:
-                        close(this->fd);
-                        this->fd = -1;
-                        return false;
-                        break;
-                    default:
-                        bytes += ret;
-                        if(bytes == sizeof(struct tlv)) {
-                            if(t.type == TLV_SUCCESS) {
-                                if(type == TLV_REGISTER_JOB) {
-                                    LOG<<"Job registered successfully"<<std::endl;
-                                } else if (type == TLV_UNREGISTER_JOB) {
-                                    LOG<<"Job unregistered successfully"<<std::endl;
-                                }
-                                exit(0);
+                            if(t.type == TLV_LIST_JOBS) {
+                                state = RECVING_RESP;
+                                tosend = 0;
+                                LOG<<" recving list"<<std::endl;
                             } else {
-                                if(type == TLV_REGISTER_JOB) {
-                                    LOG<<"Job registration failed"<<std::endl;
-                                } else if (type == TLV_UNREGISTER_JOB) {
-                                    LOG<<"Job unregistration failed"<<std::endl;
-                                }
-                                exit(0);
+                                state = SENDING_CMD;
+                                sptr = (char *)(s.c_str());
+                                bytes = 0;
+                                tosend -= sizeof(struct tlv);
+                                LOG<<" sending cmd "<<sptr<<std::endl;
                             }
                         }
                         break;
                 }
+                break;
+            case SENDING_CMD:
+                sptr = ((char *)s.c_str() + bytes);
 
+                ret = generic_writer(this->fd, sptr, t.length - bytes);
+                switch(ret) {
+                    case -1:
+                        close(this->fd);
+                        this->fd = -1;
+                        return false;
+                        break;
+                    default:
+                        bytes += ret;
+                        if(bytes == t.length) {
+                            tosend -= t.length;
+
+                            if(tosend == 0) {
+                                state = RECVING_RESP;
+                                bytes = 0;
+                                LOG<<" awaiting response from server "<<std::endl;
+                            } else {
+                                s.erase(0, t.length);
+
+                                t.type = type;
+                                if(tosend > TLV_MAX_LEN) {
+                                    t.length = TLV_MAX_LEN;
+                                    t.last = 0;
+                                    LOG<<" sending next chunk with "<<t.length<<" bytes"<<std::endl;
+                                } else {
+                                    t.length = s.length();
+                                    t.last = 1;
+                                    LOG<<" sending last chunk with "<<t.length<<" bytes"<<std::endl;
+                                }
+
+                                state = SENDING_TLV;
+                                bytes = 0;
+                            }
+                        }
+                        break;
+                    }
                 break;
             default:
                 break;
         }
-
-   //TAG
     }
 
-    sptr = ((char *)&t);
+
+    if(state != RECVING_RESP) {
+        LOG<<"STATE NOT RECVING RESP"<<std::endl;
+        return false;
+    }
+
+    sptr = (char*)&t;
     bytes = 0;
 
-    ret = read(this->fd, (sptr + bytes), (sizeof(struct tlv) - bytes));
+    ret = generic_reader(this->fd, sptr, sizeof(struct tlv) - bytes);
     switch(ret) {
         case -1:
-            LOG<<"Read failed due to "<<std::strerror(errno)<<std::endl;
             close(this->fd);
             this->fd = -1;
+            return false;
             break;
-        case 0:
-            LOG<<"Server closed connection"<<std::endl;
-            close(this->fd);
-            this->fd = -1;
-           break;
         default:
             bytes += ret;
-            if(bytes == sizeof(tlv)) {
-                if(t.type == TLV_SUCCESS) {
-                    LOG<<"Command registered successfully"<<std::endl;
-                } else {
-                    LOG<<"Command registration failed"<<std::endl;
+            if(bytes == sizeof(struct tlv)) {
+                switch(t.type) {
+                    case  TLV_SUCCESS:
+                        if(type == TLV_REGISTER_JOB) {
+                            LOG<<"Job '"<<cmd<<"' with interval "<<interval<<" registered successfully"<<std::endl;
+                        } else if (type == TLV_UNREGISTER_JOB) {
+                            LOG<<"Job '"<<cmd<<"' with interval "<<interval<<" unregistered successfully"<<std::endl;
+                        }
+                        exit(0);
+                        break;
+                    case TLV_FAILURE:
+
+                        if(type == TLV_REGISTER_JOB) {
+                            LOG<<"Job registration failed"<<std::endl;
+                        } else if (type == TLV_UNREGISTER_JOB) {
+                            LOG<<"Job unregistration failed"<<std::endl;
+                        }
+                        exit(0);
+                        break;
+                    case TLV_LIST_JOBS:
+                        state = RECVING_RESP;
+                        handle_tlv_list_jobs(t.length);
+                        break;
                 }
             }
             break;
     }
-
     return true;
 }

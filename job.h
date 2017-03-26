@@ -24,7 +24,7 @@ class JobId {
         }
 
     public:
-        uint64_t static getCurrJobId() {
+        uint64_t static get_curr_job_id() {
             return jobid_counter;
         }
 
@@ -48,27 +48,28 @@ class Job : public JobId {
         int64_t overruns = 0;        
         std::chrono::duration<int, std::milli> interval;
 
-        mutable std::string command;
-        mutable std::chrono::time_point<std::chrono::steady_clock> lastrun;
-        mutable bool scheduled = false;
+        std::string command;
+        std::chrono::time_point<std::chrono::steady_clock> lastrun;
+        bool scheduled = false;
     public:
         Job();
-        Job(std::string cmd, int ival);
+        Job(const std::string cmd, int ival);
         Job(class Job& j);
         Job(const class Job& j);
+        ~Job();
 
-        uint64_t getJobId() const;
-        std::string& getCommand() const;
-        int64_t getInterval() const;
-        int64_t getOverruns();
+        uint64_t get_job_id() const;
+        const char *get_command() const;
+        int64_t get_interval() const;
+        int64_t get_overruns();
 
-        void setScheduled();
-        void resetOverruns();
+        void set_scheduled();
+        void reset_overruns();
 
         bool operator<(const class Job& jright);
-        bool spawnProcess() const;
+        bool spawn_process() const;
 
-        bool nextRun(); /* Whether Job is ready for next run or not */
+        bool next_run(); /* Whether Job is ready for next run or not */
 };
 
 class JobCompare {

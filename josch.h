@@ -35,19 +35,17 @@ class Josch {
     public:
         Josch();
         Josch(unsigned numthreads);
+        ~Josch();
 
         void thread_loop(std::atomic<bool> &quit_flag);
-
-//        void thread_loop();
-
         bool register_job(std::string &cmd, int ival);
         bool unregister_job(uint64_t tmpjobid);
         bool unregister_job(std::string &cmd, int ival);
 
-        void list_jobs();
+        std::string list_jobs();
         void handle_jobs();
 
-        bool spawnExtraThreads(unsigned n);
+        bool spawn_extra_threads(unsigned n);
 
         void die();
 };

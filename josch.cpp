@@ -12,7 +12,18 @@ extern int main_quit;
 Josch::Josch(): tpvec(MINTHREADS) {  this->quit = false; }
 Josch::Josch(unsigned numthreads): tpvec(numthreads) { this->quit = false; }
 
-bool Josch::spawnExtraThreads(unsigned n) {
+Josch::~Josch() {
+    this->quit = true;
+
+    /* make sure all threads exit before killing the main thread */
+    for(auto& t: this->tpvec) {
+        if(t.joinable()) {
+            t.join();
+        }
+    }
+}
+
+bool Josch::spawn_extra_threads(unsigned n) {
 
     unsigned maxthreads = std::thread::hardware_concurrency();
 
@@ -54,65 +65,84 @@ void Josch::thread_loop(std::atomic<bool> &quit_flag) {
             break;
         }
         //LOG<<"Woke up!"<<std::endl;
-        const class Job& job = this->workqueue.top();
+        const class Job& job = this->workqueue.top();        
+        job.spawn_process();
+
         this->workqueue.pop();
-        job.spawnProcess();
     }
     LOG<<"Thread finished"<<std::endl;
 }
 
 //template <typename clock>
 bool Josch::register_job(std::string &cmd, int ival) {
-
-    std::lock_guard<std::mutex> lock(this->mut_jl);
     try {
+        std::lock_guard<std::mutex> lock(this->mut_jl);
 
         LOG<<"Registering Job : "<<cmd<<" with interval "<<ival<<std::endl;
         this->jlist.push_back(Job(cmd, ival));
     } catch (std::exception &e) {
-        LOG<<"Couldn't register job "<<e.what()<<std::endl;
+        LOG<<"Couldn't register job: "<<e.what()<<std::endl;
         return false;
     }
-
+    return true;
 }
 
 //template <typename clock>
 bool Josch::unregister_job(uint64_t tmpjobid) {
+    try {
+        std::lock_guard<std::mutex> lock(this->mut_jl);
 
-    std::lock_guard<std::mutex> lock(this->mut_jl);
-
-    std::remove_if(this->jlist.begin(), this->jlist.end(), [&tmpjobid](const class Job& j) {
-        if(j.getJobId() == tmpjobid) {
-            return true;
-        }
-    });
+        std::remove_if(this->jlist.begin(), this->jlist.end(), [&tmpjobid](const class Job& j) {
+            if(j.get_job_id() == tmpjobid) {
+                LOG<<"Unregistering Job "<<j.get_job_id()<<" : "<<j.get_command()<<" with interval "<<j.get_interval()<<std::endl;
+                return true;
+            }
+            return false;
+        });
+    } catch (std::exception &e) {
+        LOG<<"Couldn't unregister job: "<<e.what()<<std::endl;
+        return false;
+    }
+    return true;
 }
 
 bool Josch::unregister_job(std::string &cmd, int ival) {
-    std::lock_guard<std::mutex> lock(this->mut_jl);
 
-    this->jlist.erase(std::remove_if(this->jlist.begin(), this->jlist.end(), [&cmd, &ival] (const class Job& j) {
-        if(cmd != j.getCommand()) {
-            return false;
-        }
-        if(ival != j.getInterval()) {
-            return false;
-        }
-        LOG<<"Removing "<<j.getCommand()<<" with interval "<<j.getInterval()<<std::endl;
-        return true;
-    }), this->jlist.end());
+    try {
+        std::lock_guard<std::mutex> lock(this->mut_jl);
+
+        this->jlist.erase(std::remove_if(this->jlist.begin(), this->jlist.end(), [&cmd, &ival] (const class Job& j) {
+            if(cmd != j.get_command()) {
+                return false;
+            }
+            if(ival != j.get_interval()) {
+                return false;
+            }
+            LOG<<"Removing "<<j.get_command()<<" with interval "<<j.get_interval()<<std::endl;
+            return true;
+        }), this->jlist.end());
+    } catch (std::exception &e) {
+        LOG<<"Couldn't unregister job: "<<e.what()<<std::endl;
+        return false;
+    }
+    return true;
 }
 
 ///template <typename clock>
-void Josch::list_jobs() {
+std::string Josch::list_jobs() {
 
     LOG<<std::string(80, '=')<<std::endl;
 
+    std::string s;
+
     for(auto& job: this->jlist) {
-        LOG<<" Job["<<job.getJobId()<<"]: '"<<job.getCommand()<<"' ival: "<<job.getInterval()<<std::endl;
+        LOG<<" Job["<<job.get_job_id()<<"]: '"<<job.get_command()<<"' ival: "<<job.get_interval()<<std::endl;
+        s.append(" Job [" + std::to_string(job.get_job_id()) + "]: " + job.get_command() + " ival: " + std::to_string(job.get_interval()) + "\n");
     }
 
     LOG<<std::string(80, '=')<<std::endl;
+
+    return s;
 }
 
 void Josch::handle_jobs() {
@@ -133,7 +163,7 @@ void Josch::handle_jobs() {
 //                next_task.resetOverruns();
 //                this->spawnExtraThreads(MINTHREADS);
 //            }            
-            if(/*(this->workqueue.size() < NUMTHREADS) &&*/ (next_task.nextRun() == true)) {
+            if(/*(this->workqueue.size() < NUMTHREADS) &&*/ (next_task.next_run() == true)) {
                 this->workqueue.push(next_task);
             }
         }
@@ -154,6 +184,8 @@ void Josch::handle_jobs() {
 
     /* make sure all threads exit before killing the main thread */
     for(auto& t: this->tpvec) {
-        t.join();
+        if(t.joinable()) {
+            t.join();
+        }
     }
 }

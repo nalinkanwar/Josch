@@ -55,10 +55,15 @@ int main(int argc, char *argv[])
         {NULL,          0,                  NULL,       0}
     };
 
-    while((cliopt = getopt_long(argc, argv, "r:u:i:", cli, &cli_index)) != -1) {
+    while((cliopt = getopt_long(argc, argv, ":r:u:i:l", cli, &cli_index)) != -1) {
         switch(cliopt) {
+            case ':':
+                std::cout<<"Invalid or missing arguments"<<std::endl;
             case 0:
-                //@FIXME print usage
+                std::cout<<"Usage: "<<argv[0]<<" [-r \"job, interval\" -u \"job, interval\"] "<<std::endl<<
+                           "\t\t -r \"job, interval\": registers a <job> that is to be repeated at every <interval> intervals"<<std::endl<<
+                           "\t\t -u \"job, interval\": unregisters a previously registered <job>"<<std::endl;
+                exit(0);
                 break;
             case 'v':
                 std::cout<<"Josch v1.0"<<std::endl;
@@ -84,6 +89,7 @@ int main(int argc, char *argv[])
                     class tlv_client t;
                     if(t.init(std::string(DEFAULT_FPATH)) == false) {
                         LOG<<"Failed to init tlv client"<<std::endl;
+                        exit(-1);
                     }
                     if(t.sendcmd(TLV_REGISTER_JOB, jobcmd, interval) == false) {
                         LOG<<"Failed to send command to josch"<<std::endl;
@@ -113,6 +119,7 @@ int main(int argc, char *argv[])
                     class tlv_client t;
                     if(t.init(std::string(DEFAULT_FPATH)) == false) {
                         LOG<<"Failed to init tlv client"<<std::endl;
+                        exit(-1);
                     }
                     if(t.sendcmd(TLV_UNREGISTER_JOB, jobcmd, interval) == false) {
                         LOG<<"Failed to send command to josch"<<std::endl;
@@ -125,7 +132,15 @@ int main(int argc, char *argv[])
                 break;
             case 'l':
             {
-                //@FIXME TLV client
+                class tlv_client t;
+                std::string s;
+                if(t.init(std::string(DEFAULT_FPATH)) == false) {
+                    LOG<<"Failed to init tlv client"<<std::endl;
+                    exit(-1);
+                }
+                if(t.sendcmd(TLV_LIST_JOBS, s, 0) == false) {
+                    LOG<<"Failed to send command to josch"<<std::endl;
+                }
                 exit(0);
             }
             default:
@@ -139,16 +154,22 @@ int main(int argc, char *argv[])
 
     unsigned nHWthreads = std::thread::hardware_concurrency();
     //LOG<<"HWTheads: "<<nHWthreads<<std::endl;
-    class Josch js(nHWthreads ? nHWthreads: MINTHREADS);
-    class client_handler ch(&js);
-    ch.init(DEFAULT_FPATH);
+    try {
 
-    js.handle_jobs();
-    LOG<<"Finished handling jobs"<<endl;
+        class Josch js(nHWthreads ? nHWthreads: MINTHREADS);
+        class client_handler ch(&js);
+        ch.init(DEFAULT_FPATH);
 
-    /* Make sure our TLV client handler thread also terminates before main thread */
-    ch.die();
-    ch.join();
+        js.handle_jobs();
+        LOG<<"Finished handling jobs"<<endl;
+
+        /* Make sure our TLV client handler thread also terminates before main thread */
+        ch.die();
+        ch.join();
+    } catch (std::exception &e) {
+        LOG<<"Exception :"<<e.what()<<std::endl;
+        main_quit = true;
+    }
 
     LOG<<"Exiting main thread"<<endl;
 

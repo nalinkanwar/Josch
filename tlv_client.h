@@ -19,8 +19,8 @@ class tlv_client
         ~tlv_client();
         bool init(const std::string &f);
 
-        bool sendcmd(int type, std::string& cmd, int interval);
-
+        bool sendcmd(tlv_types type, std::string& cmd, int interval);
+        bool handle_tlv_list_jobs(int length);
 };
 
 #endif // TLV_CLIENT_H
