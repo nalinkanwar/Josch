@@ -18,6 +18,7 @@ class client_handler
         std::atomic<bool> quit;        
         Josch *j;
 
+        std::string joblist;
         std::string fpath;
         int lfd, epfd;
         std::list<class conn_handler<class client_handler>> cl_list;
@@ -28,6 +29,9 @@ class client_handler
 
         void handle_conns();
         void handle_listener();
+
+        void get_list_of_jobs();
+        std::string& get_joblist();
 
         friend tlv_types command_handler(client_handler& ch, char* ptr, int length);
 

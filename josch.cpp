@@ -92,13 +92,20 @@ bool Josch::unregister_job(uint64_t tmpjobid) {
     try {
         std::lock_guard<std::mutex> lock(this->mut_jl);
 
-        std::remove_if(this->jlist.begin(), this->jlist.end(), [&tmpjobid](const class Job& j) {
+        auto it = std::remove_if(this->jlist.begin(), this->jlist.end(), [&tmpjobid](const class Job& j) {
             if(j.get_job_id() == tmpjobid) {
                 LOG<<"Unregistering Job "<<j.get_job_id()<<" : "<<j.get_command()<<" with interval "<<j.get_interval()<<std::endl;
                 return true;
             }
             return false;
         });
+
+        if(it == this->jlist.end()) {
+            /* didnt find the job */
+            return false;
+        }
+
+        this->jlist.erase(it, this->jlist.end());
     } catch (std::exception &e) {
         LOG<<"Couldn't unregister job: "<<e.what()<<std::endl;
         return false;
@@ -111,7 +118,7 @@ bool Josch::unregister_job(std::string &cmd, int ival) {
     try {
         std::lock_guard<std::mutex> lock(this->mut_jl);
 
-        this->jlist.erase(std::remove_if(this->jlist.begin(), this->jlist.end(), [&cmd, &ival] (const class Job& j) {
+        auto it = std::remove_if(this->jlist.begin(), this->jlist.end(), [&cmd, &ival] (const class Job& j) {
             if(cmd != j.get_command()) {
                 return false;
             }
@@ -120,7 +127,14 @@ bool Josch::unregister_job(std::string &cmd, int ival) {
             }
             LOG<<"Removing "<<j.get_command()<<" with interval "<<j.get_interval()<<std::endl;
             return true;
-        }), this->jlist.end());
+        });
+
+        if(it == this->jlist.end()) {
+            /* didnt find the job */
+            return false;
+        }
+
+        this->jlist.erase(it, this->jlist.end());
     } catch (std::exception &e) {
         LOG<<"Couldn't unregister job: "<<e.what()<<std::endl;
         return false;

@@ -38,37 +38,50 @@ void handle_quit(int signal) {
  * 4. Overrun mitigation?
  */
 
+void print_usage(char *binname) {
+    std::cout<<"Usage: "<<binname<<" [ -ml -i<tag> -r \"<job>, <interval>\" -u \"<job>, <interval>\" -d <jobid> ] "<<std::endl<<
+               "\t\t -i <tag>: will spawn a new Josch instance with ID <tag>; use before other commands to send to that Josch instance"<<std::endl<<
+               "\t\t -r \"job, interval\": registers a <job> that is to be repeated at every <interval> intervals"<<std::endl<<
+               "\t\t -u \"job, interval\": unregisters a previously registered <job>"<<std::endl<<
+               "\t\t -d \"jobid\": unregisters a previously registered job with <jobid>"<<std::endl<<
+               "\t\t -l : lists all jobs currently registered"<<std::endl;
+}
 
 int main(int argc, char *argv[])
 {
 
-    int cli_index = 0, cliopt;
+    int cli_index = 0, cliopt, log_level = 1;
     std::list<class Job> regjobs, unregjobs;
+    std::string fpath;
 
     main_quit = false;
     static struct option cli[] = {
         {"register",    required_argument,  NULL,       'r'},
         {"unregister",  required_argument,  NULL,       'u'},
+        {"deregister",  required_argument,  NULL,       'd'},
         {"id",          required_argument,  NULL,       'i'},
         {"version",     no_argument,        NULL,       'v'},
         {"listjobs",    no_argument,        NULL,       'l'},
+        {"mute",        no_argument,        NULL,       'm'},
         {NULL,          0,                  NULL,       0}
     };
 
-    while((cliopt = getopt_long(argc, argv, ":r:u:i:l", cli, &cli_index)) != -1) {
+    while((cliopt = getopt_long(argc, argv, ":r:u:i:ld:vm", cli, &cli_index)) != -1) {
         switch(cliopt) {
             case ':':
                 std::cout<<"Invalid or missing arguments"<<std::endl;
             case 0:
-                std::cout<<"Usage: "<<argv[0]<<" [-r \"job, interval\" -u \"job, interval\"] "<<std::endl<<
-                           "\t\t -r \"job, interval\": registers a <job> that is to be repeated at every <interval> intervals"<<std::endl<<
-                           "\t\t -u \"job, interval\": unregisters a previously registered <job>"<<std::endl;
+                print_usage(argv[0]);
                 exit(0);
                 break;
             case 'v':
                 std::cout<<"Josch v1.0"<<std::endl;
                 std::cout<<"Written by Nalin Kanwar."<<std::endl;
                 exit(0);
+                break;
+            case 'm':
+                log_level = 0;
+                std::cout<<"Setting log level to mute"<<std::endl;
                 break;
             case 'r':
             {
@@ -87,19 +100,26 @@ int main(int argc, char *argv[])
                     LOG<<"Registering "<<jobcmd<<" with interval "<<std::endl;
 
                     class tlv_client t;
-                    if(t.init(std::string(DEFAULT_FPATH)) == false) {
-                        LOG<<"Failed to init tlv client"<<std::endl;
-                        exit(-1);
+
+                    if(fpath.empty()) {
+                        if(t.init(std::string(DEFAULT_FPATH)) == false) {
+                            LOG<<"Failed to init tlv client"<<std::endl;
+                            exit(-1);
+                        }
+                    } else {
+                        if(t.init(std::string(fpath)) == false) {
+                            LOG<<"Failed to init tlv client"<<std::endl;
+                            exit(-1);
+                        }
                     }
                     if(t.sendcmd(TLV_REGISTER_JOB, jobcmd, interval) == false) {
                         LOG<<"Failed to send command to josch"<<std::endl;
                     }
                     LOG<<"Registered '"<<jobcmd<<"' successfully"<<std::endl;
-
-                    exit(0);
                 } else {
-                    //@FIXME invalid argument?
+                    print_usage(argv[0]);
                 }
+                exit(0);
             }
                 break;
             case 'u':
@@ -119,38 +139,89 @@ int main(int argc, char *argv[])
                     LOG<<"Unregistering "<<jobcmd<<" with interval "<<std::endl;
 
                     class tlv_client t;
-                    if(t.init(std::string(DEFAULT_FPATH)) == false) {
-                        LOG<<"Failed to init tlv client"<<std::endl;
-                        exit(-1);
+                    if(fpath.empty()) {
+                        if(t.init(std::string(DEFAULT_FPATH)) == false) {
+                            LOG<<"Failed to init tlv client"<<std::endl;
+                            exit(-1);
+                        }
+                    } else {
+                        if(t.init(std::string(fpath)) == false) {
+                            LOG<<"Failed to init tlv client"<<std::endl;
+                            exit(-1);
+                        }
                     }
                     if(t.sendcmd(TLV_UNREGISTER_JOB, jobcmd, interval) == false) {
                         LOG<<"Failed to send command to josch"<<std::endl;
                     }
                     LOG<<"Unregistered '"<<jobcmd<<"' successfully"<<std::endl;
-                    exit(0);
                 } else {
-                    //@FIXME invalid argument?
+                    print_usage(argv[0]);
                 }
+                exit(0);
+            }
+                break;
+            case 'd':
+            {
+                //temporary; we'll take last argument as job later on so it works like 'watch'
+                std::string arg = optarg;
+
+                LOG<<"Unregistering Job with id"<<arg<<std::endl;
+
+                class tlv_client t;
+                if(fpath.empty()) {
+                    if(t.init(std::string(DEFAULT_FPATH)) == false) {
+                        LOG<<"Failed to init tlv client"<<std::endl;
+                        exit(-1);
+                    }
+                } else {
+                    if(t.init(std::string(fpath)) == false) {
+                        LOG<<"Failed to init tlv client"<<std::endl;
+                        exit(-1);
+                    }
+                }
+                if(t.sendcmd(TLV_UNREGISTER_JOB_BY_ID, arg) == false) {
+                    LOG<<"Failed to send command to josch"<<std::endl;
+                }
+                LOG<<"Unregistered Job with id'"<<arg<<"' successfully"<<std::endl;
+                exit(0);
             }
                 break;
             case 'l':
             {
                 class tlv_client t;
                 std::string s;
-                if(t.init(std::string(DEFAULT_FPATH)) == false) {
-                    LOG<<"Failed to init tlv client"<<std::endl;
-                    exit(-1);
+                if(fpath.empty()) {
+                    if(t.init(std::string(DEFAULT_FPATH)) == false) {
+                        LOG<<"Failed to init tlv client"<<std::endl;
+                        exit(-1);
+                    }
+                } else {
+                    if(t.init(std::string(fpath)) == false) {
+                        LOG<<"Failed to init tlv client"<<std::endl;
+                        exit(-1);
+                    }
                 }
-                if(t.sendcmd(TLV_LIST_JOBS, s, 0) == false) {
+                if(t.sendcmd(TLV_LIST_JOBS) == false) {
                     LOG<<"Failed to send command to josch"<<std::endl;
                 }
                 exit(0);
             }
+                break;
+            case 'i':
+            {
+                fpath = std::string(DEFAULT_FPATH).append(optarg);
+                break;
+            }
             default:
+                print_usage(argv[0]);
+                exit(0);
                 break;
         }
     }
 
+    if(log_level == 0) {
+        close(1);
+    }
     /* set child handler to reap zombie childs */
     signal(SIGCHLD, proc_exit);
     signal(SIGINT, handle_quit);
@@ -162,7 +233,12 @@ int main(int argc, char *argv[])
 
         class Josch js(nHWthreads ? nHWthreads: MINTHREADS);
         class client_handler ch(&js);
-        ch.init(std::string(DEFAULT_FPATH));
+
+        if(fpath.empty()) {
+            ch.init(std::string(DEFAULT_FPATH));
+        } else {
+            ch.init(std::string(fpath));
+        }
 
         js.handle_jobs();
         LOG<<"Finished handling jobs"<<endl;

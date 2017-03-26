@@ -58,7 +58,7 @@ bool client_handler::init(const std::string &fpath) {
 
     this->lfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if(this->lfd == -1) {
-        LOG<<"Socket creation failed because "<<std::strerror(errno)<<std::endl;        
+        LOG<<"Socket creation failed because "<<std::strerror(errno)<<std::endl;
         return false;
     }
 
@@ -120,6 +120,16 @@ void client_handler::handle_listener() {
     LOG<<" New client connected: "<<cfd<<std::endl;
 }
 
+
+void client_handler::get_list_of_jobs() {
+    this->joblist = this->j->list_jobs();
+}
+
+std::string& client_handler::get_joblist() {
+    return this->joblist;
+}
+
+
 tlv_types command_handler(client_handler& ch, char* ptr, int length) {
 
     //LOG<<"Command_handler called"<<std::endl;
@@ -173,7 +183,33 @@ tlv_types command_handler(client_handler& ch, char* ptr, int length) {
             }
         }
             break;
+        case TLV_UNREGISTER_JOB_BY_ID:
+        {
+            LOG<<"Got Unregister Job with length "<<tptr->length<<" : ";
+            std::cout.write(tptr->value, tptr->length);
+            std::cout<<std::endl;
+
+            std::string str;
+            str.append(tptr->value, tptr->length);
+            uint64_t jobid = std::strtoull(str.c_str(), NULL, 10);
+
+            bool ret = ch.j->unregister_job(jobid);
+
+            if(ret == true) {
+                LOG<<"TLV_SUCCESS"<<std::endl;
+                return TLV_SUCCESS;
+            } else {
+                LOG<<"TLV_FAILURE"<<std::endl;
+                return TLV_FAILURE;
+            }
+        }
+            break;
+
         case TLV_LIST_JOBS:
+        {
+            ch.get_list_of_jobs();
+            return TLV_LIST_JOBS;
+        }
             break;
         default:
             break;

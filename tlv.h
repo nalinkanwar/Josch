@@ -7,6 +7,7 @@ enum tlv_types {
     TLV_NONE = 0,
     TLV_REGISTER_JOB,
     TLV_UNREGISTER_JOB,
+    TLV_UNREGISTER_JOB_BY_ID,
     TLV_LIST_JOBS,
     TLV_SUCCESS,
     TLV_FAILURE

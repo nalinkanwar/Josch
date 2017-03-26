@@ -5,7 +5,7 @@
 #include <thread>
 
 #define BUFFSIZE 4096
-#define LOG std::cout<<"["<<std::this_thread::get_id()<<"] "
+//#define LOG std::cout<<"["<<std::this_thread::get_id()<<"] "
 
 struct iobuf {
     int size;
@@ -21,6 +21,7 @@ class conn_handler
         int fd;
         bool write_ready;
         struct iobuf iob;
+        T* cl;
     public:
         conn_handler();
         conn_handler(int fd);
@@ -33,6 +34,7 @@ class conn_handler
         void set_fd(int fd);
         int get_fd() const;
         int ready_to_write() const;
+        void set_cl(T*);
         bool reader(T &ch, tlv_types (*process_data)(T &, char *, int));
         bool writer(T &ch, bool (*process_data)(T &, char *, int));
 };

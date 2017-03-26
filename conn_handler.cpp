@@ -4,6 +4,8 @@
 #include <unistd.h>
 
 #include "conn_handler.h"
+#include "client_handler.h"
+#include "tlv_client.h"
 #include "tlv.h"
 
 /* Force template generations */
@@ -100,7 +102,7 @@ template<class T>
 bool conn_handler<T>::reader(T &ch, tlv_types (*process_data)(T&, char *, int)) {
     int ret;
 
-    LOG<<"READER called"<<std::endl;
+    //LOG<<"READER called"<<std::endl;
     while(1) {
         if(this->iob.size == this->iob.filled) {
             char *tmp;
@@ -112,7 +114,7 @@ bool conn_handler<T>::reader(T &ch, tlv_types (*process_data)(T&, char *, int)) 
 
             this->iob.buf = tmp;
             this->iob.size = this->iob.size + BUFFSIZE;
-            LOG<<"Buffer expanded to "<<this->iob.size<<std::endl;
+            //LOG<<"Buffer expanded to "<<this->iob.size<<std::endl;
         }
         errno = 0;
         ret = read(this->fd,
@@ -121,7 +123,7 @@ bool conn_handler<T>::reader(T &ch, tlv_types (*process_data)(T&, char *, int)) 
         switch(ret) {
             case -1:
                 if(errno == EAGAIN) {
-                    LOG<<"EAGAIN"<<std::endl;
+                    //LOG<<"EAGAIN"<<std::endl;
                     return true;
                 }
                 LOG<<"Read failed due to:"<<std::strerror(errno)<<std::endl;
@@ -131,12 +133,12 @@ bool conn_handler<T>::reader(T &ch, tlv_types (*process_data)(T&, char *, int)) 
                 return false;
                 break;
             default:
-                LOG<<"Read "<<ret<<" bytes"<<std::endl;
+                //LOG<<"Read "<<ret<<" bytes"<<std::endl;
                 this->iob.filled += ret;
                 if((this->iob.filled - this->iob.processed) >= sizeof (struct tlv)) {
                     struct tlv* tptr = (struct tlv*)(this->iob.buf + this->iob.processed);
 
-                    LOG<<"Got tlv t:"<<tptr->type<<" l: "<<tptr->length<<std::endl;
+                    //LOG<<"Got tlv t:"<<tptr->type<<" l: "<<tptr->length<<std::endl;
 
                     if((this->iob.filled - this->iob.processed) >= (sizeof(struct tlv) + tptr->length)) {
                         //DO PROCESSING
@@ -166,8 +168,31 @@ bool conn_handler<T>::reader(T &ch, tlv_types (*process_data)(T&, char *, int)) 
                                     t.length = 0;
                                     t.last = 1;
 
-                                    this->iob.filled = this->iob.processed = 0;
+                                    this->reset_iob();
                                     if(this->write_to_peer(tptr, sizeof(struct tlv)) == false) {
+                                        return false;
+                                    }
+                                    return true;
+                                }
+                                break;
+                            case TLV_LIST_JOBS:
+                                {
+
+                                    //<<"Got List Jobs"<<std::endl;
+                                    std::string joblist = ch.get_joblist();
+
+                                    struct tlv t;
+                                    char *tptr = (char*)&t;
+                                    t.type = TLV_LIST_JOBS;
+                                    t.length = joblist.length();
+                                    t.last = 1;
+
+                                    this->reset_iob();
+                                    if(this->write_to_peer(tptr, sizeof(struct tlv)) == false) {
+                                        return false;
+                                    }
+
+                                    if(this->write_to_peer(joblist) == false) {
                                         return false;
                                     }
                                     return true;
@@ -179,14 +204,19 @@ bool conn_handler<T>::reader(T &ch, tlv_types (*process_data)(T&, char *, int)) 
                         }
 
                         this->iob.processed += (sizeof(struct tlv) + tptr->length);
-                        LOG<<"Processed "<<this->iob.processed<<" bytes"<<std::endl;
+                        //<<"Processed "<<this->iob.processed<<" bytes"<<std::endl;
                     }
                 }
                 break;
         }
     }
-    LOG<<"READER end"<<std::endl;
+    //LOG<<"READER end"<<std::endl;
     return true;
+}
+
+template<class T>
+void conn_handler<T>::set_cl(T* tcl) {
+    this->cl = tcl;
 }
 
 template<class T>
@@ -194,11 +224,11 @@ bool conn_handler<T>::writer(T &ch, bool (*process_data)(T &, char *, int)) {
 
     int ret;
 
-    LOG<<"WRITER called"<<std::endl;
+    //LOG<<"WRITER called"<<std::endl;
     this->write_ready = true;
 
     if(this->iob.filled <= this->iob.processed) {
-        LOG<<"Nothing to write! "<<this->iob.filled<< " <= "<<this->iob.processed<<std::endl;
+        //LOG<<"Nothing to write! "<<this->iob.filled<< " <= "<<this->iob.processed<<std::endl;
         return true;
     }
 
@@ -213,17 +243,17 @@ bool conn_handler<T>::writer(T &ch, bool (*process_data)(T &, char *, int)) {
             break;
         default:
             {
-                LOG<<"Wrote "<<ret<<" bytes"<<std::endl;
+                //LOG<<"Wrote "<<ret<<" bytes"<<std::endl;
                 //DO PROCESSING?
                 if(process_data(ch, this->iob.buf + this->iob.processed, ret) == false) {
                     this->iob.filled = this->iob.processed = 0;
                     return true;
                 }
                 this->iob.processed += ret;
-                LOG<<"Processed total "<<this->iob.processed<<" bytes"<<std::endl;
+                //LOG<<"Processed total "<<this->iob.processed<<" bytes"<<std::endl;
             }
             break;
     }
-    LOG<<"WRITER end"<<std::endl;
+    //LOG<<"WRITER end"<<std::endl;
     return false;
 }

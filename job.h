@@ -6,7 +6,9 @@
 #include <chrono>
 #include <string>
 
-#define LOG std::cout<<"["<<std::this_thread::get_id()<<"] "
+extern std::atomic<int> log_level;
+
+#define LOG std::cout<<"["<<std::this_thread::get_id()<<"] "\
 
 /* This class is used to give unique id to new Jobs;
  * We just use a constantly increasing static unsigned integer

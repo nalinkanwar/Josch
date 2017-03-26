@@ -61,18 +61,51 @@ tlv_types dummy_process_readdata(tlv_client& th, char* tptr, int len) {
     struct tlv* t;
 
     t = (struct tlv*)tptr;
-    if(t->type == TLV_SUCCESS) {
-        return TLV_SUCCESS;
-    } else if(t->type == TLV_FAILURE) {
-        return TLV_FAILURE;
-    }
+    switch(t->type) {
+        case TLV_SUCCESS:
+            return TLV_SUCCESS;
+        case TLV_FAILURE:
+            //std::cout<<"TLV_FAILURE"<<std::endl;
+            return TLV_FAILURE;
+        case TLV_LIST_JOBS:
 
-    //@FIXME default?
-    return TLV_SUCCESS;
+            if(t->length == 0) {
+                std::cout<<"No jobs registered"<<std::endl;
+            } else {
+                std::cout.write(t->value, len);
+                std::cout<<std::endl;
+            }
+
+            return TLV_SUCCESS;
+    }
 }
 
 
 bool tlv_client::sendcmd(tlv_types type) {
+
+    if(type != TLV_LIST_JOBS) {
+        return false;
+    }
+
+    struct tlv t;
+    char *cptr = (char *)&t;
+
+    t.type = type;
+    t.length = 0;
+    t.last = true;
+
+    if(this->conn.write_to_peer(cptr, sizeof(struct tlv)) == false) {
+        LOG<<"error writing tlv "<<std::strerror(errno)<<std::endl;
+        return false;
+    }
+
+    while(this->conn.writer((*this), dummy_process_data) != true);
+
+    this->conn.reset_iob();
+
+    if(this->conn.reader((*this), dummy_process_readdata) == TLV_FAILURE) {
+        return false;
+    }
 
     return true;
 }
@@ -82,8 +115,10 @@ bool tlv_client::sendcmd(tlv_types type, std::string& cmd, int interval) {
     struct tlv t;
     char *cptr = (char *)&t;
 
-    std::string ival = "," + std::to_string(interval);
-    cmd.append(ival);
+    if(interval != 0) {
+        std::string ival = "," + std::to_string(interval);
+        cmd.append(ival);
+    }
 
     t.type = type;
     t.length = cmd.length();
@@ -105,9 +140,19 @@ bool tlv_client::sendcmd(tlv_types type, std::string& cmd, int interval) {
 
     this->conn.reset_iob();
 
-    if(this->conn.reader((*this), dummy_process_readdata) == TLV_FAILURE) {
+    if(this->conn.reader((*this), dummy_process_readdata) == false) {
         return false;
     }
 
     return true;
+}
+
+/* dummy; will never be called */
+void tlv_client::get_list_of_jobs() {
+
+}
+
+/* dummy; will never be called */
+std::string& tlv_client::get_joblist() {
+    return this->fpath;
 }
