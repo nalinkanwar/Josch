@@ -30,7 +30,6 @@ bool tlv_client::init(const std::string& f) {
     memcpy(sun.sun_path, f.c_str(), f.length() + 1);
 
     if(connect(this->fd, (struct sockaddr *)&sun, sizeof(struct sockaddr_un)) == -1) {
-        //@FIXME error
         LOG<<"Failed to connect due to "<<std::strerror(errno)<<std::endl;
         close(this->fd);
         this->fd = -1;

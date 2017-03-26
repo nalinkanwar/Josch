@@ -48,7 +48,7 @@ void Josch::die() {
 void Josch::thread_loop(std::atomic<bool> &quit_flag) {
     /* start picking up from workqueue in threads */
 
-    LOG<<"Thread started"<<std::endl;
+    //LOG<<"Thread started"<<std::endl;
 
     while(this->quit == false) {
 
@@ -70,7 +70,7 @@ void Josch::thread_loop(std::atomic<bool> &quit_flag) {
 
         this->workqueue.pop();
     }
-    LOG<<"Thread finished"<<std::endl;
+    //LOG<<"Thread finished"<<std::endl;
 }
 
 //template <typename clock>
@@ -194,7 +194,7 @@ void Josch::handle_jobs() {
 
     /* wake up all threads before exiting */
     this->cv_wq.notify_all();
-    LOG<<"Main thread done : "<<this->quit<<std::endl;
+    //LOG<<"Main thread done : "<<this->quit<<std::endl;
 
     /* make sure all threads exit before killing the main thread */
     for(auto& t: this->tpvec) {

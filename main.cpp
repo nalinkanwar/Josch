@@ -32,15 +32,14 @@ void handle_quit(int signal) {
 }
 
 /* Pending Tasks
- * 1. get number of hw threads (with hw_concurrency/sysinfo?) and set no. of threads to that value - DONE
- * 2. command line options handler - DONE
- * 3. Unix socket listener for registering/unregistering jobs; probably good if separate thread
  * 4. Overrun mitigation?
  */
 
 void print_usage(char *binname) {
-    std::cout<<"Usage: "<<binname<<" [ -ml -i<tag> -r \"<job>, <interval>\" -u \"<job>, <interval>\" -d <jobid> ] "<<std::endl<<
+    std::cout<<"Usage: "<<binname<<" [ -mfl -i<tag> -r \"<job>, <interval>\" -u \"<job>, <interval>\" -d <jobid> ] "<<std::endl<<
+               "\t\t -f : Start a new Josch instance"<<std::endl<<
                "\t\t -i <tag>: will spawn a new Josch instance with ID <tag>; use before other commands to send to that Josch instance"<<std::endl<<
+               "\t\t -m : to mute all logs"<<std::endl<<
                "\t\t -r \"job, interval\": registers a <job> that is to be repeated at every <interval> intervals"<<std::endl<<
                "\t\t -u \"job, interval\": unregisters a previously registered <job>"<<std::endl<<
                "\t\t -d \"jobid\": unregisters a previously registered job with <jobid>"<<std::endl<<
@@ -50,7 +49,9 @@ void print_usage(char *binname) {
 int main(int argc, char *argv[])
 {
 
-    int cli_index = 0, cliopt, log_level = 1;
+    int cli_index = 0, cliopt;
+    bool log_level = true;
+    bool foreground = false;
     std::list<class Job> regjobs, unregjobs;
     std::string fpath;
 
@@ -66,8 +67,11 @@ int main(int argc, char *argv[])
         {NULL,          0,                  NULL,       0}
     };
 
-    while((cliopt = getopt_long(argc, argv, ":r:u:i:ld:vm", cli, &cli_index)) != -1) {
+    while((cliopt = getopt_long(argc, argv, ":r:u:i:ld:vmf", cli, &cli_index)) != -1) {
         switch(cliopt) {
+            case 'f':
+                foreground = true;
+                break;
             case ':':
                 std::cout<<"Invalid or missing arguments"<<std::endl;
             case 0:
@@ -219,6 +223,11 @@ int main(int argc, char *argv[])
         }
     }
 
+    if(foreground == false) {
+        print_usage(argv[0]);
+        exit(0);
+    }
+
     if(log_level == 0) {
         close(1);
     }
@@ -241,7 +250,7 @@ int main(int argc, char *argv[])
         }
 
         js.handle_jobs();
-        LOG<<"Finished handling jobs"<<endl;
+        //LOG<<"Finished handling jobs"<<endl;
 
         /* Make sure our TLV client handler thread also terminates before main thread */
         ch.die();
@@ -251,7 +260,7 @@ int main(int argc, char *argv[])
         main_quit = true;
     }
 
-    LOG<<"Exiting main thread"<<endl;
+    //LOG<<"Exiting main thread"<<endl;
 
     return 0;
 }
